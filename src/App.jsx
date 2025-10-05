@@ -1,16 +1,36 @@
-import React, { useState } from 'react';
-import { Heart, Send, EyeOff, Users, Pause, CheckCircle, Target, Lightbulb, Shield, Map, UserPlus, Copy, Mail, LogIn, User, Settings, Sparkles, X, Save } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Heart, Send, EyeOff, Users, Pause, CheckCircle, Target, Lightbulb, Shield, Map, UserPlus, Copy, Mail, LogIn, User, Settings, Sparkles, X, Save, Share2, Link2, Check, LogOut } from 'lucide-react';
 
 export default function BlendedFamilyResetApp() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState('');
+  
   const [isRegistered, setIsRegistered] = useState(false);
   const [isOrganizer, setIsOrganizer] = useState(false);
   const [showCreateFamily, setShowCreateFamily] = useState(false);
   const [showJoinFamily, setShowJoinFamily] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
   const [familyName, setFamilyName] = useState('');
   const [userName, setUserName] = useState('');
   const [joinCode, setJoinCode] = useState('');
-  const [generatedCode, setGeneratedCode] = useState('FAMILY2025');
+  const [generatedCode, setGeneratedCode] = useState('');
+  const [inviteLink, setInviteLink] = useState('');
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
+  
+  const [emailConfig, setEmailConfig] = useState({
+    senderEmail: '',
+    senderName: '',
+    subject: 'Join Our Family Healing Journey',
+    message: ''
+  });
+
+  const [inviteEmails, setInviteEmails] = useState('');
   
   const [userProfile, setUserProfile] = useState({
     name: '',
@@ -19,26 +39,18 @@ export default function BlendedFamilyResetApp() {
     ambitions: '',
     dreams: '',
     interests: '',
-    bio: ''
+    bio: '',
+    email: ''
   });
 
-  const [familyMembers, setFamilyMembers] = useState([
-    { name: 'You', role: 'Organizer', status: 'Active' }
-  ]);
+  const [familyMembers, setFamilyMembers] = useState([]);
   const [pendingInvites, setPendingInvites] = useState([]);
   const [activeTab, setActiveTab] = useState('anonymous');
   const [anonymousText, setAnonymousText] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(true);
-  const [submissions, setSubmissions] = useState([
-    { id: 1, text: 'I feel like I do not belong here', votes: 3 },
-    { id: 2, text: 'I want us to have our own traditions', votes: 5 },
-    { id: 3, text: 'I miss how things used to be', votes: 4 }
-  ]);
+  const [submissions, setSubmissions] = useState([]);
   const [selectedGroundRules, setSelectedGroundRules] = useState([]);
-  const [hopes, setHopes] = useState([
-    { id: 1, text: 'Weekly family dinners together', author: 'Anonymous' },
-    { id: 2, text: 'Feel comfortable being myself', author: 'Sarah' }
-  ]);
+  const [hopes, setHopes] = useState([]);
   const [peaceTalkMode, setPeaceTalkMode] = useState(false);
   const [currentSpeaker, setCurrentSpeaker] = useState(0);
   const [agreements, setAgreements] = useState([]);
@@ -66,13 +78,164 @@ export default function BlendedFamilyResetApp() {
     { category: 'Safety', question: 'When do you feel most comfortable in our family?', gradient: 'from-amber-400 to-yellow-600' }
   ];
 
+  useEffect(() => {
+    checkAuthStatus();
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    if (code) {
+      setJoinCode(code);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (generatedCode) {
+      const baseUrl = window.location.origin + window.location.pathname;
+      setInviteLink(`${baseUrl}?code=${generatedCode}`);
+    }
+  }, [generatedCode]);
+
+  useEffect(() => {
+    if (isAuthenticated && currentUserId) {
+      loadUserSession();
+    }
+  }, [isAuthenticated, currentUserId]);
+
+  const checkAuthStatus = () => {
+    const session = localStorage.getItem('familyResetSession');
+    if (session) {
+      const sessionData = JSON.parse(session);
+      setIsAuthenticated(true);
+      setCurrentUserId(sessionData.userId);
+      setUserProfile({ ...userProfile, email: sessionData.email });
+    } else {
+      setShowLoginModal(true);
+    }
+  };
+
+  const loadUserSession = () => {
+    const userDataKey = `userData_${currentUserId}`;
+    const userData = localStorage.getItem(userDataKey);
+    
+    if (userData) {
+      const data = JSON.parse(userData);
+      setIsRegistered(data.isRegistered || false);
+      setFamilyName(data.familyName || '');
+      setUserName(data.userName || '');
+      setIsOrganizer(data.isOrganizer || false);
+      setGeneratedCode(data.familyCode || '');
+      setJoinCode(data.familyCode || '');
+      setUserProfile(data.userProfile || userProfile);
+      setFamilyMembers(data.familyMembers || []);
+      setPendingInvites(data.pendingInvites || []);
+      setSubmissions(data.submissions || []);
+      setHopes(data.hopes || []);
+      setAgreements(data.agreements || []);
+      setSelectedGroundRules(data.selectedGroundRules || []);
+    }
+  };
+
+  const saveUserSession = (data) => {
+    const userDataKey = `userData_${currentUserId}`;
+    const existingData = localStorage.getItem(userDataKey);
+    const currentData = existingData ? JSON.parse(existingData) : {};
+    
+    const updatedData = { ...currentData, ...data };
+    localStorage.setItem(userDataKey, JSON.stringify(updatedData));
+  };
+
+  const handleLogin = () => {
+    if (!loginEmail || !loginPassword) {
+      alert('Please enter both email and password');
+      return;
+    }
+
+    const usersKey = 'familyResetUsers';
+    const users = JSON.parse(localStorage.getItem(usersKey) || '{}');
+
+    if (isSignUp) {
+      if (users[loginEmail]) {
+        alert('This email is already registered. Please login instead.');
+        return;
+      }
+      
+      const userId = 'user_' + Date.now();
+      users[loginEmail] = {
+        userId,
+        email: loginEmail,
+        password: loginPassword,
+        createdAt: new Date().toISOString()
+      };
+      
+      localStorage.setItem(usersKey, JSON.stringify(users));
+      localStorage.setItem('familyResetSession', JSON.stringify({ userId, email: loginEmail }));
+      
+      setCurrentUserId(userId);
+      setIsAuthenticated(true);
+      setShowLoginModal(false);
+      setUserProfile({ ...userProfile, email: loginEmail });
+      
+      alert('Account created successfully!');
+    } else {
+      const user = users[loginEmail];
+      
+      if (!user) {
+        alert('No account found with this email. Please sign up first.');
+        return;
+      }
+      
+      if (user.password !== loginPassword) {
+        alert('Incorrect password');
+        return;
+      }
+      
+      localStorage.setItem('familyResetSession', JSON.stringify({ userId: user.userId, email: loginEmail }));
+      setCurrentUserId(user.userId);
+      setIsAuthenticated(true);
+      setShowLoginModal(false);
+      setUserProfile({ ...userProfile, email: loginEmail });
+    }
+
+    setLoginEmail('');
+    setLoginPassword('');
+  };
+
+  const handleLogout = () => {
+    if (confirm('Are you sure you want to log out?')) {
+      localStorage.removeItem('familyResetSession');
+      setIsAuthenticated(false);
+      setIsRegistered(false);
+      setShowLoginModal(true);
+      window.location.reload();
+    }
+  };
+
   const handleCreateFamily = () => {
     if (familyName.trim() && userName.trim()) {
+      const code = 'FAM' + Math.random().toString(36).substring(2, 8).toUpperCase();
+      setGeneratedCode(code);
       setIsRegistered(true);
       setIsOrganizer(true);
       setShowCreateFamily(false);
       setUserProfile({ ...userProfile, name: userName, role: 'Organizer' });
-      setGeneratedCode('FAM' + Math.random().toString(36).substring(2, 8).toUpperCase());
+      
+      const newMember = {
+        id: Date.now(),
+        name: userName,
+        role: 'Organizer',
+        status: 'Active',
+        joinedDate: new Date().toISOString()
+      };
+      setFamilyMembers([newMember]);
+      
+      saveUserSession({
+        isRegistered: true,
+        familyName,
+        userName,
+        isOrganizer: true,
+        familyCode: code,
+        userProfile: { ...userProfile, name: userName, role: 'Organizer' },
+        familyMembers: [newMember]
+      });
     }
   };
 
@@ -82,13 +245,131 @@ export default function BlendedFamilyResetApp() {
       setIsOrganizer(false);
       setShowJoinFamily(false);
       setUserProfile({ ...userProfile, name: userName, role: 'Family Member' });
+      
+      const newMember = {
+        id: Date.now(),
+        name: userName,
+        role: 'Family Member',
+        status: 'Active',
+        joinedDate: new Date().toISOString()
+      };
+      
+      setFamilyMembers([newMember]);
+      
+      saveUserSession({
+        isRegistered: true,
+        familyName: familyName || 'My Family',
+        userName,
+        isOrganizer: false,
+        familyCode: joinCode,
+        userProfile: { ...userProfile, name: userName, role: 'Family Member' },
+        familyMembers: [newMember]
+      });
     }
   };
 
   const handleSaveProfile = () => {
     setShowSettings(false);
+    saveUserSession({ userProfile });
     alert('Profile saved successfully');
   };
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(inviteLink);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
+
+  const handleCopyCode = () => {
+    navigator.clipboard.writeText(generatedCode);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 2000);
+  };
+
+  const handleShareLink = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Join ${familyName} - Family Reset`,
+          text: `Join our family healing journey. Code: ${generatedCode}`,
+          url: inviteLink
+        });
+      } catch (err) {
+        console.log('Share cancelled');
+      }
+    } else {
+      handleCopyLink();
+    }
+  };
+
+  if (!isAuthenticated || showLoginModal) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(234,179,8,0.1),transparent_50%)]"></div>
+        <div className="max-w-md w-full relative z-10">
+          <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl shadow-2xl p-8 border border-yellow-500/20">
+            <div className="flex items-center justify-center gap-3 mb-6">
+              <div className="relative">
+                <Heart className="text-yellow-500" size={48} fill="currentColor" />
+                <Sparkles className="absolute -top-1 -right-1 text-amber-400" size={20} />
+              </div>
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent">Family Reset</h1>
+            </div>
+            
+            <h2 className="text-2xl font-bold text-white mb-2 text-center">{isSignUp ? 'Create Account' : 'Welcome Back'}</h2>
+            <p className="text-center text-gray-400 mb-6">{isSignUp ? 'Sign up to start your healing journey' : 'Login to continue your journey'}</p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-yellow-400 mb-2">Email</label>
+                <input 
+                  type="email" 
+                  value={loginEmail} 
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  placeholder="your.email@example.com"
+                  className="w-full p-3 bg-gray-900 border-2 border-gray-700 text-white rounded-xl focus:outline-none focus:border-yellow-500 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-yellow-400 mb-2">Password</label>
+                <input 
+                  type="password" 
+                  value={loginPassword} 
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full p-3 bg-gray-900 border-2 border-gray-700 text-white rounded-xl focus:outline-none focus:border-yellow-500 transition-colors"
+                  onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+                />
+              </div>
+
+              <button 
+                onClick={handleLogin}
+                className="w-full bg-gradient-to-r from-yellow-500 to-amber-600 text-black py-3 rounded-xl hover:from-yellow-400 hover:to-amber-500 transition-all duration-300 font-bold"
+              >
+                {isSignUp ? 'Sign Up' : 'Login'}
+              </button>
+
+              <div className="text-center">
+                <button 
+                  onClick={() => setIsSignUp(!isSignUp)}
+                  className="text-yellow-400 hover:text-yellow-300 text-sm transition-colors"
+                >
+                  {isSignUp ? 'Already have an account? Login' : "Don't have an account? Sign Up"}
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-6 bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4">
+              <p className="text-xs text-yellow-200 text-center">
+                Your account keeps you connected to your family space across all devices
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!isRegistered) {
     return (
@@ -96,12 +377,17 @@ export default function BlendedFamilyResetApp() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(234,179,8,0.1),transparent_50%)]"></div>
         <div className="max-w-md w-full relative z-10">
           <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl shadow-2xl p-8 mb-6 border border-yellow-500/20">
-            <div className="flex items-center justify-center gap-3 mb-6">
-              <div className="relative">
-                <Heart className="text-yellow-500" size={48} fill="currentColor" />
-                <Sparkles className="absolute -top-1 -right-1 text-amber-400" size={20} />
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <Heart className="text-yellow-500" size={40} fill="currentColor" />
+                  <Sparkles className="absolute -top-1 -right-1 text-amber-400" size={16} />
+                </div>
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent">Family Reset</h1>
               </div>
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent">Family Reset</h1>
+              <button onClick={handleLogout} className="p-2 hover:bg-gray-700 rounded-lg transition-colors" title="Logout">
+                <LogOut className="text-gray-400" size={20} />
+              </button>
             </div>
             <p className="text-center text-gray-300 mb-8">A sacred space for blended families to heal and reconnect</p>
 
@@ -129,7 +415,7 @@ export default function BlendedFamilyResetApp() {
                   <input type="text" value={familyName} onChange={(e) => setFamilyName(e.target.value)} placeholder="Our Family, The Smiths, etc." className="w-full p-3 bg-gray-900 border-2 border-gray-700 text-white rounded-xl focus:outline-none focus:border-yellow-500 transition-colors" />
                 </div>
                 <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4">
-                  <p className="text-sm text-yellow-200">You will get a join code to invite family members. They can join whenever they are ready.</p>
+                  <p className="text-sm text-yellow-200">You will get a shareable link and code to invite family members.</p>
                 </div>
                 <button onClick={handleCreateFamily} className="w-full bg-gradient-to-r from-yellow-500 to-amber-600 text-black py-3 rounded-xl hover:from-yellow-400 hover:to-amber-500 transition-all duration-300 font-bold">Create Space</button>
                 <button onClick={() => setShowCreateFamily(false)} className="w-full border-2 border-gray-700 text-gray-300 py-3 rounded-xl hover:bg-gray-800 transition-all duration-300">Back</button>
@@ -154,36 +440,6 @@ export default function BlendedFamilyResetApp() {
               </div>
             )}
           </div>
-
-          <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl shadow-2xl p-6 border border-yellow-500/20">
-            <h3 className="font-bold text-yellow-400 mb-3 text-lg">How It Works</h3>
-            <div className="space-y-3 text-sm text-gray-300">
-              <div className="flex items-start gap-3">
-                <div className="w-6 h-6 bg-gradient-to-br from-yellow-500 to-amber-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-black font-bold text-xs">1</span>
-                </div>
-                <p>One person creates a family space and gets a join code</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-6 h-6 bg-gradient-to-br from-yellow-500 to-amber-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-black font-bold text-xs">2</span>
-                </div>
-                <p>Family members join voluntarily using the code</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-6 h-6 bg-gradient-to-br from-yellow-500 to-amber-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-black font-bold text-xs">3</span>
-                </div>
-                <p>Everyone participates at their own pace and comfort level</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-6 h-6 bg-gradient-to-br from-yellow-500 to-amber-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-black font-bold text-xs">4</span>
-                </div>
-                <p>Prepare together for a peace talk when ready</p>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     );
@@ -202,92 +458,29 @@ export default function BlendedFamilyResetApp() {
                 <p className="text-gray-400">Building our new beginning together</p>
               </div>
             </div>
-            <button onClick={() => setShowSettings(true)} className="p-2 hover:bg-gray-700 rounded-lg transition-colors">
-              <Settings className="text-yellow-500" size={24} />
-            </button>
-          </div>
-        </div>
-
-        {showSettings && (
-          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-            <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-yellow-500/20">
-              <div className="sticky top-0 bg-gradient-to-br from-gray-800 to-gray-900 p-6 border-b border-gray-700 flex items-center justify-between">
-                <h2 className="text-2xl font-bold text-yellow-400">Profile Settings</h2>
-                <button onClick={() => setShowSettings(false)} className="p-2 hover:bg-gray-700 rounded-lg transition-colors">
-                  <X className="text-gray-400" size={24} />
-                </button>
-              </div>
-
-              <div className="p-6 space-y-6">
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="w-20 h-20 bg-gradient-to-br from-yellow-500 to-amber-600 rounded-full flex items-center justify-center">
-                    <User className="text-black" size={40} />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-white">{userProfile.name || userName}</h3>
-                    <p className="text-gray-400">{userProfile.role}</p>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-yellow-400 mb-2">Display Name</label>
-                  <input type="text" value={userProfile.name} onChange={(e) => setUserProfile({...userProfile, name: e.target.value})} placeholder="Your name" className="w-full p-3 bg-gray-900 border-2 border-gray-700 text-white rounded-xl focus:outline-none focus:border-yellow-500 transition-colors" />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-yellow-400 mb-2">Age</label>
-                  <input type="text" value={userProfile.age} onChange={(e) => setUserProfile({...userProfile, age: e.target.value})} placeholder="Your age (optional)" className="w-full p-3 bg-gray-900 border-2 border-gray-700 text-white rounded-xl focus:outline-none focus:border-yellow-500 transition-colors" />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-yellow-400 mb-2">Bio</label>
-                  <textarea value={userProfile.bio} onChange={(e) => setUserProfile({...userProfile, bio: e.target.value})} placeholder="Tell your family about yourself..." className="w-full h-24 p-3 bg-gray-900 border-2 border-gray-700 text-white rounded-xl resize-none focus:outline-none focus:border-yellow-500 transition-colors" />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-yellow-400 mb-2">Ambitions</label>
-                  <textarea value={userProfile.ambitions} onChange={(e) => setUserProfile({...userProfile, ambitions: e.target.value})} placeholder="What are your goals and aspirations?" className="w-full h-24 p-3 bg-gray-900 border-2 border-gray-700 text-white rounded-xl resize-none focus:outline-none focus:border-yellow-500 transition-colors" />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-yellow-400 mb-2">Dreams</label>
-                  <textarea value={userProfile.dreams} onChange={(e) => setUserProfile({...userProfile, dreams: e.target.value})} placeholder="What do you dream about for your future?" className="w-full h-24 p-3 bg-gray-900 border-2 border-gray-700 text-white rounded-xl resize-none focus:outline-none focus:border-yellow-500 transition-colors" />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-yellow-400 mb-2">Interests</label>
-                  <textarea value={userProfile.interests} onChange={(e) => setUserProfile({...userProfile, interests: e.target.value})} placeholder="What do you enjoy doing? Hobbies, activities, passions..." className="w-full h-24 p-3 bg-gray-900 border-2 border-gray-700 text-white rounded-xl resize-none focus:outline-none focus:border-yellow-500 transition-colors" />
-                </div>
-
-                <div className="flex gap-3 pt-4">
-                  <button onClick={handleSaveProfile} className="flex-1 bg-gradient-to-r from-yellow-500 to-amber-600 text-black py-3 rounded-xl hover:from-yellow-400 hover:to-amber-500 transition-all duration-300 font-bold flex items-center justify-center gap-2">
-                    <Save size={20} />
-                    Save Profile
-                  </button>
-                  <button onClick={() => setShowSettings(false)} className="flex-1 border-2 border-gray-700 text-gray-300 py-3 rounded-xl hover:bg-gray-800 transition-all duration-300">
-                    Cancel
-                  </button>
-                </div>
-              </div>
+            <div className="flex gap-2">
+              <button onClick={() => setShowSettings(true)} className="p-2 hover:bg-gray-700 rounded-lg transition-colors">
+                <Settings className="text-yellow-500" size={24} />
+              </button>
+              <button onClick={handleLogout} className="p-2 hover:bg-gray-700 rounded-lg transition-colors" title="Logout">
+                <LogOut className="text-gray-400" size={24} />
+              </button>
             </div>
           </div>
-        )}
+        </div>
 
         {isOrganizer && (
           <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl shadow-2xl p-6 mb-6 border border-yellow-500/20">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-yellow-400">Family Members</h2>
               <div className="flex gap-2">
-                <button onClick={() => navigator.clipboard.writeText(generatedCode)} className="flex items-center gap-2 px-4 py-2 bg-yellow-500/20 text-yellow-400 rounded-lg hover:bg-yellow-500/30 transition-colors text-sm border border-yellow-500/30">
-                  <Copy size={16} />
-                  {generatedCode}
+                <button onClick={handleCopyCode} className="flex items-center gap-2 px-4 py-2 bg-yellow-500/20 text-yellow-400 rounded-lg hover:bg-yellow-500/30 transition-colors text-sm border border-yellow-500/30">
+                  {copiedCode ? <Check size={16} /> : <Copy size={16} />}
+                  {copiedCode ? 'Copied!' : generatedCode}
                 </button>
-                <button onClick={() => {
-                  const email = prompt('Enter email or phone:');
-                  if (email) setPendingInvites([...pendingInvites, { id: Date.now(), contact: email, sent: 'Just now' }]);
-                }} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-yellow-500 to-amber-600 text-black rounded-lg hover:from-yellow-400 hover:to-amber-500 transition-all duration-300 text-sm font-bold">
-                  <Mail size={16} />
-                  Invite
+                <button onClick={handleShareLink} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-yellow-500 to-amber-600 text-black rounded-lg hover:from-yellow-400 hover:to-amber-500 transition-all duration-300 text-sm font-bold">
+                  <Share2 size={16} />
+                  Share
                 </button>
               </div>
             </div>
@@ -306,40 +499,11 @@ export default function BlendedFamilyResetApp() {
               ))}
             </div>
 
-            {pendingInvites.length > 0 && (
-              <div className="border-t border-gray-700 pt-4">
-                <p className="text-sm font-medium text-yellow-400 mb-2">Pending Invitations</p>
-                {pendingInvites.map(inv => (
-                  <div key={inv.id} className="text-sm text-gray-400 flex justify-between">
-                    <span>{inv.contact}</span>
-                    <span className="text-gray-600">{inv.sent}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
             <div className="mt-4 bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3">
-              <p className="text-xs text-yellow-200">Share the join code with family members. They can join when ready.</p>
+              <p className="text-xs text-yellow-200">Share link: {inviteLink}</p>
             </div>
           </div>
         )}
-
-        <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl shadow-2xl p-4 mb-6 border border-yellow-500/20">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-yellow-400">Reset Progress</span>
-            <span className="text-sm text-gray-400">Phase 1 of 3</span>
-          </div>
-          <div className="flex gap-2">
-            <div className="flex-1 h-2 bg-gradient-to-r from-yellow-500 to-amber-600 rounded-full"></div>
-            <div className="flex-1 h-2 bg-gray-700 rounded-full"></div>
-            <div className="flex-1 h-2 bg-gray-700 rounded-full"></div>
-          </div>
-          <div className="mt-2 text-xs text-gray-400 flex justify-between">
-            <span>Preparation</span>
-            <span>Peace Talk</span>
-            <span>Follow Through</span>
-          </div>
-        </div>
 
         <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl shadow-2xl p-2 mb-6 grid grid-cols-2 md:grid-cols-4 gap-2 border border-yellow-500/20">
           <button onClick={() => setActiveTab('anonymous')} className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl transition-all duration-300 text-sm ${activeTab === 'anonymous' ? 'bg-gradient-to-r from-yellow-500 to-amber-600 text-black font-bold' : 'text-gray-400 hover:bg-gray-700'}`}>
@@ -364,7 +528,7 @@ export default function BlendedFamilyResetApp() {
           {activeTab === 'anonymous' && (
             <div>
               <h2 className="text-xl font-bold text-yellow-400 mb-2">Safe Sharing Space</h2>
-              <p className="text-gray-300 mb-6">Share what matters to you. Others will see these but will not know who wrote them unless you choose to add your name.</p>
+              <p className="text-gray-300 mb-6">Share what matters to you.</p>
               
               <div className="mb-6">
                 <textarea value={anonymousText} onChange={(e) => setAnonymousText(e.target.value)} placeholder="What do you want the family to know?" className="w-full h-32 p-4 bg-gray-900 border-2 border-gray-700 text-white rounded-xl resize-none focus:outline-none focus:border-yellow-500 transition-colors placeholder-gray-500" />
@@ -375,7 +539,9 @@ export default function BlendedFamilyResetApp() {
                   </label>
                   <button onClick={() => {
                     if (anonymousText.trim()) {
-                      setSubmissions([{ id: Date.now(), text: anonymousText, votes: 0 }, ...submissions]);
+                      const newSubmissions = [{ id: Date.now(), text: anonymousText, votes: 0 }, ...submissions];
+                      setSubmissions(newSubmissions);
+                      saveUserSession({ submissions: newSubmissions });
                       setAnonymousText('');
                     }
                   }} className="bg-gradient-to-r from-yellow-500 to-amber-600 text-black px-6 py-2 rounded-xl hover:from-yellow-400 hover:to-amber-500 transition-all duration-300 flex items-center gap-2 font-bold">
@@ -385,27 +551,33 @@ export default function BlendedFamilyResetApp() {
                 </div>
               </div>
 
-              <div className="border-t border-gray-700 pt-6">
-                <h3 className="font-bold text-yellow-400 mb-4">What Family Members Are Sharing</h3>
-                <div className="space-y-3">
-                  {submissions.map(sub => (
-                    <div key={sub.id} className="bg-gray-900 border border-gray-700 rounded-xl p-4 hover:border-yellow-500/30 transition-colors">
-                      <p className="text-gray-200 mb-3">{sub.text}</p>
-                      <button onClick={() => setSubmissions(submissions.map(s => s.id === sub.id ? {...s, votes: s.votes + 1} : s))} className="text-sm text-yellow-400 hover:text-yellow-300 flex items-center gap-1 transition-colors">
-                        <Heart size={16} />
-                        <span>{sub.votes} people relate to this</span>
-                      </button>
-                    </div>
-                  ))}
+              {submissions.length > 0 && (
+                <div className="border-t border-gray-700 pt-6">
+                  <h3 className="font-bold text-yellow-400 mb-4">What Family Members Are Sharing</h3>
+                  <div className="space-y-3">
+                    {submissions.map(sub => (
+                      <div key={sub.id} className="bg-gray-900 border border-gray-700 rounded-xl p-4 hover:border-yellow-500/30 transition-colors">
+                        <p className="text-gray-200 mb-3">{sub.text}</p>
+                        <button onClick={() => {
+                          const updated = submissions.map(s => s.id === sub.id ? {...s, votes: s.votes + 1} : s);
+                          setSubmissions(updated);
+                          saveUserSession({ submissions: updated });
+                        }} className="text-sm text-yellow-400 hover:text-yellow-300 flex items-center gap-1 transition-colors">
+                          <Heart size={16} />
+                          <span>{sub.votes} people relate to this</span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
 
           {activeTab === 'rules' && (
             <div>
-              <h2 className="text-xl font-bold text-yellow-400 mb-2">Ground Rules for Our Talk</h2>
-              <p className="text-gray-300 mb-6">Everyone picks rules they think will help. We will use the top 5.</p>
+              <h2 className="text-xl font-bold text-yellow-400 mb-2">Ground Rules</h2>
+              <p className="text-gray-300 mb-6">Select up to 5 rules for your peace talk.</p>
 
               <div className="mb-6">
                 <div className="flex gap-2 mb-4">
@@ -419,11 +591,16 @@ export default function BlendedFamilyResetApp() {
               <div className="space-y-3">
                 {groundRulesOptions.map((rule, i) => (
                   <button key={i} onClick={() => {
+                    let updated;
                     if (selectedGroundRules.includes(rule)) {
-                      setSelectedGroundRules(selectedGroundRules.filter(r => r !== rule));
+                      updated = selectedGroundRules.filter(r => r !== rule);
                     } else if (selectedGroundRules.length < 5) {
-                      setSelectedGroundRules([...selectedGroundRules, rule]);
+                      updated = [...selectedGroundRules, rule];
+                    } else {
+                      return;
                     }
+                    setSelectedGroundRules(updated);
+                    saveUserSession({ selectedGroundRules: updated });
                   }} disabled={selectedGroundRules.length >= 5 && !selectedGroundRules.includes(rule)} className={`w-full p-4 rounded-xl border-2 text-left transition-all duration-300 ${selectedGroundRules.includes(rule) ? 'border-yellow-500 bg-yellow-500/10 text-white' : selectedGroundRules.length >= 5 ? 'border-gray-800 bg-gray-900 text-gray-600' : 'border-gray-700 hover:border-yellow-500/50 text-gray-300 bg-gray-900'}`}>
                     <div className="flex items-center gap-3">
                       {selectedGroundRules.includes(rule) && <CheckCircle className="text-yellow-500" size={20} />}
@@ -443,7 +620,9 @@ export default function BlendedFamilyResetApp() {
               <div className="mb-6">
                 <input type="text" placeholder="I hope we..." className="w-full p-4 bg-gray-900 border-2 border-gray-700 text-white rounded-xl focus:outline-none focus:border-yellow-500 transition-colors placeholder-gray-500" onKeyPress={(e) => {
                   if (e.key === 'Enter' && e.target.value.trim()) {
-                    setHopes([...hopes, { id: Date.now(), text: e.target.value, author: 'You' }]);
+                    const newHopes = [...hopes, { id: Date.now(), text: e.target.value, author: userName }];
+                    setHopes(newHopes);
+                    saveUserSession({ hopes: newHopes });
                     e.target.value = '';
                   }
                 }} />
@@ -484,10 +663,6 @@ export default function BlendedFamilyResetApp() {
                         <CheckCircle className="text-yellow-500 mt-1" size={20} />
                         <p>Choose a neutral moderator</p>
                       </div>
-                      <div className="flex items-start gap-3">
-                        <CheckCircle className="text-yellow-500 mt-1" size={20} />
-                        <p>Remember: progress over perfection</p>
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -496,9 +671,9 @@ export default function BlendedFamilyResetApp() {
                   <div className="bg-gradient-to-br from-yellow-500/10 to-amber-600/10 border-2 border-yellow-500/30 rounded-xl p-6">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-lg font-bold text-yellow-400">Current Speaker</h3>
-                      <button onClick={() => setCurrentSpeaker((currentSpeaker + 1) % familyMembers.length)} className="bg-gradient-to-r from-yellow-500 to-amber-600 text-black px-4 py-2 rounded-lg hover:from-yellow-400 hover:to-amber-500 transition-all duration-300 text-sm font-bold">Next Person</button>
+                      <button onClick={() => setCurrentSpeaker((currentSpeaker + 1) % Math.max(familyMembers.length, 1))} className="bg-gradient-to-r from-yellow-500 to-amber-600 text-black px-4 py-2 rounded-lg hover:from-yellow-400 hover:to-amber-500 transition-all duration-300 text-sm font-bold">Next Person</button>
                     </div>
-                    <p className="text-2xl font-bold text-white">{familyMembers[currentSpeaker].name}</p>
+                    <p className="text-2xl font-bold text-white">{familyMembers[currentSpeaker]?.name || userName}</p>
                     <p className="text-sm text-yellow-400 mt-2">Everyone else: Listen without interrupting</p>
                   </div>
 
@@ -517,7 +692,11 @@ export default function BlendedFamilyResetApp() {
                     </button>
                     <button onClick={() => {
                       const agr = prompt('What did you agree on?');
-                      if (agr) setAgreements([...agreements, { id: Date.now(), text: agr, time: 'Just now' }]);
+                      if (agr) {
+                        const newAgreements = [...agreements, { id: Date.now(), text: agr, time: 'Just now' }];
+                        setAgreements(newAgreements);
+                        saveUserSession({ agreements: newAgreements });
+                      }
                     }} className="border-2 border-yellow-500 text-yellow-400 bg-yellow-500/10 py-3 rounded-xl hover:bg-yellow-500/20 transition-all duration-300 flex items-center justify-center gap-2 font-medium">
                       <CheckCircle size={20} />
                       Mark Agreement
@@ -555,9 +734,9 @@ export default function BlendedFamilyResetApp() {
             Quick Tips
           </h3>
           <div className="text-sm text-gray-300 space-y-1">
+            <p>• Your data saves automatically to your browser</p>
             <p>• Complete Safe Share and Ground Rules before the peace talk</p>
-            <p>• Progress happens in small steps, not one conversation</p>
-            <p>• It is okay to feel uncomfortable - healing is not easy</p>
+            <p>• Progress happens in small steps</p>
             <p>• Follow up in one week to check on agreements</p>
           </div>
         </div>
