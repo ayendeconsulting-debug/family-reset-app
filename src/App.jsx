@@ -112,9 +112,16 @@ function FamilyResetApp() {
   const adminLogin = () => {
     if (!loginEmail.trim() || !loginPassword.trim()) return;
     
+    console.log('Attempting login with:', loginEmail);
+    console.log('Available spaces:', spaces);
+    
     const userSpace = Object.values(spaces).find(space => 
-      space.admin.email === loginEmail.trim() && space.admin.password === loginPassword
+      space.admin && 
+      space.admin.email.toLowerCase() === loginEmail.trim().toLowerCase() && 
+      space.admin.password === loginPassword
     );
+    
+    console.log('Found space:', userSpace);
     
     if (userSpace) {
       setCurrentSpace(userSpace);
@@ -124,14 +131,19 @@ function FamilyResetApp() {
       setLoginEmail('');
       setLoginPassword('');
     } else {
-      alert('Invalid email or password');
+      alert('Invalid email or password. Please check your credentials.');
     }
   };
 
   const joinWithCode = () => {
     if (!joinCode.trim()) return;
     
-    const foundSpace = Object.values(spaces).find(space => space.id === joinCode.trim());
+    console.log('Attempting to join with code:', joinCode.trim());
+    console.log('Available spaces:', Object.keys(spaces));
+    
+    const foundSpace = spaces[joinCode.trim()];
+    
+    console.log('Found space:', foundSpace);
     
     if (foundSpace) {
       setCurrentSpace(foundSpace);
@@ -139,7 +151,7 @@ function FamilyResetApp() {
       setShowMemberJoin(true);
       setJoinCode('');
     } else {
-      alert('Invalid space code');
+      alert('Invalid space code. Please check the code and try again.');
     }
   };
 
