@@ -45,7 +45,19 @@ function FamilyResetApp() {
   ];
 
   useEffect(() => {
-    const saved = window.familyResetData || { spaces: {} };
+    // Try to load from localStorage first, then fall back to window
+    let saved;
+    try {
+      const localData = localStorage.getItem('familyResetData');
+      if (localData) {
+        saved = JSON.parse(localData);
+      } else {
+        saved = window.familyResetData || { spaces: {} };
+      }
+    } catch (e) {
+      saved = window.familyResetData || { spaces: {} };
+    }
+    
     setSpaces(saved.spaces || {});
     const urlParams = new URLSearchParams(window.location.search);
     const spaceId = urlParams.get('space');
@@ -71,6 +83,12 @@ function FamilyResetApp() {
 
   useEffect(() => {
     window.familyResetData = { spaces };
+    // Also save to localStorage as backup
+    try {
+      localStorage.setItem('familyResetData', JSON.stringify({ spaces }));
+    } catch (e) {
+      console.error('Error saving to localStorage:', e);
+    }
   }, [spaces]);
 
   useEffect(() => {
@@ -112,16 +130,11 @@ function FamilyResetApp() {
   const adminLogin = () => {
     if (!loginEmail.trim() || !loginPassword.trim()) return;
     
-    console.log('Attempting login with:', loginEmail);
-    console.log('Available spaces:', spaces);
-    
     const userSpace = Object.values(spaces).find(space => 
       space.admin && 
       space.admin.email.toLowerCase() === loginEmail.trim().toLowerCase() && 
       space.admin.password === loginPassword
     );
-    
-    console.log('Found space:', userSpace);
     
     if (userSpace) {
       setCurrentSpace(userSpace);
@@ -138,12 +151,7 @@ function FamilyResetApp() {
   const joinWithCode = () => {
     if (!joinCode.trim()) return;
     
-    console.log('Attempting to join with code:', joinCode.trim());
-    console.log('Available spaces:', Object.keys(spaces));
-    
     const foundSpace = spaces[joinCode.trim()];
-    
-    console.log('Found space:', foundSpace);
     
     if (foundSpace) {
       setCurrentSpace(foundSpace);
