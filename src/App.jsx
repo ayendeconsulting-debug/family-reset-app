@@ -51,10 +51,16 @@ function FamilyResetApp() {
     if (spaceId && saved.spaces[spaceId]) {
       setCurrentSpace(saved.spaces[spaceId]);
       setShowMemberJoin(true);
+      setShowAdminSetup(false);
+      setShowAdminLogin(false);
     } else if (Object.keys(saved.spaces || {}).length > 0) {
       setShowAdminLogin(true);
+      setShowAdminSetup(false);
+      setShowMemberJoin(false);
     } else {
       setShowAdminSetup(true);
+      setShowAdminLogin(false);
+      setShowMemberJoin(false);
     }
   }, []);
 
