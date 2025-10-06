@@ -30,6 +30,8 @@ function FamilyResetApp() {
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState('');
   const [likedRules, setLikedRules] = useState({});
+  const [showLanding, setShowLanding] = useState(true);
+  const [joinCode, setJoinCode] = useState('');
 
   const ruleTemplates = [
     "We listen without interrupting",
@@ -53,12 +55,15 @@ function FamilyResetApp() {
       setShowMemberJoin(true);
       setShowAdminSetup(false);
       setShowAdminLogin(false);
+      setShowLanding(false);
     } else if (Object.keys(saved.spaces || {}).length > 0) {
-      setShowAdminLogin(true);
+      setShowLanding(true);
+      setShowAdminLogin(false);
       setShowAdminSetup(false);
       setShowMemberJoin(false);
     } else {
-      setShowAdminSetup(true);
+      setShowLanding(true);
+      setShowAdminSetup(false);
       setShowAdminLogin(false);
       setShowMemberJoin(false);
     }
@@ -101,6 +106,7 @@ function FamilyResetApp() {
     setCurrentSpace(newSpace);
     setCurrentUser(admin);
     setShowAdminSetup(false);
+    setShowLanding(false);
   };
 
   const adminLogin = () => {
@@ -114,10 +120,26 @@ function FamilyResetApp() {
       setCurrentSpace(userSpace);
       setCurrentUser(userSpace.admin);
       setShowAdminLogin(false);
+      setShowLanding(false);
       setLoginEmail('');
       setLoginPassword('');
     } else {
       alert('Invalid email or password');
+    }
+  };
+
+  const joinWithCode = () => {
+    if (!joinCode.trim()) return;
+    
+    const foundSpace = Object.values(spaces).find(space => space.id === joinCode.trim());
+    
+    if (foundSpace) {
+      setCurrentSpace(foundSpace);
+      setShowLanding(false);
+      setShowMemberJoin(true);
+      setJoinCode('');
+    } else {
+      alert('Invalid space code');
     }
   };
 
@@ -126,6 +148,7 @@ function FamilyResetApp() {
     const existingMember = currentSpace.members.find(m => m.name.toLowerCase() === memberName.trim().toLowerCase() && m.role !== 'admin');
     if (existingMember) {
       setCurrentUser(existingMember);
+      setShowMemberJoin(false);
     } else {
       const newMember = {
         id: Date.now().toString(),
@@ -136,15 +159,15 @@ function FamilyResetApp() {
       };
       const updatedSpace = { ...currentSpace, members: [...currentSpace.members, newMember] };
       setSpaces(prev => ({ ...prev, [currentSpace.id]: updatedSpace }));
+      setCurrentSpace(updatedSpace);
       setCurrentUser(newMember);
+      setShowMemberJoin(false);
     }
-    setShowMemberJoin(false);
     setMemberName('');
   };
 
   const generateInviteLink = () => {
-    const baseUrl = window.location.origin + window.location.pathname;
-    return baseUrl + '?space=' + currentSpace.id;
+    return currentSpace.id;
   };
 
   const copyInviteLink = () => {
@@ -157,7 +180,7 @@ function FamilyResetApp() {
   const handleLogout = () => {
     setCurrentUser(null);
     setCurrentSpace(null);
-    setShowAdminLogin(true);
+    setShowLanding(true);
     setActiveTab('home');
     setShowSettings(false);
     window.history.replaceState({}, '', window.location.pathname);
@@ -267,6 +290,47 @@ function FamilyResetApp() {
     setEditColor('');
   };
 
+  if (showLanding) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center p-4">
+        <div className="bg-black border-2 border-yellow-500 rounded-2xl shadow-2xl p-8 max-w-md w-full">
+          <div className="text-center mb-8">
+            <Heart className="w-20 h-20 mx-auto mb-6 text-yellow-500" strokeWidth={3} />
+            <h1 className="text-4xl font-bold text-yellow-500 mb-3">Welcome Back</h1>
+            <p className="text-gray-300 text-lg">Sign in to your healing space</p>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-bold text-yellow-500 mb-2">Email</label>
+              <input type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} className="w-full px-4 py-3 bg-transparent border-2 border-yellow-500 rounded-lg focus:ring-2 focus:ring-yellow-500 text-white placeholder-gray-500" placeholder="your@email.com" />
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-yellow-500 mb-2">Password</label>
+              <input type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && adminLogin()} className="w-full px-4 py-3 bg-transparent border-2 border-yellow-500 rounded-lg focus:ring-2 focus:ring-yellow-500 text-white placeholder-gray-500" placeholder="Password" />
+            </div>
+            <button onClick={adminLogin} className="w-full bg-yellow-500 text-black py-3 rounded-lg font-bold hover:bg-yellow-400 transition text-lg">Sign In</button>
+            <button onClick={() => { setShowLanding(false); setShowAdminSetup(true); }} className="w-full bg-transparent border-2 border-yellow-500 text-yellow-500 py-3 rounded-lg font-bold hover:bg-gray-900 transition">Create New Space</button>
+            
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-700"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-black text-gray-500">OR</span>
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-bold text-yellow-500 mb-2">Join with Code</label>
+              <input type="text" value={joinCode} onChange={(e) => setJoinCode(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && joinWithCode()} className="w-full px-4 py-3 bg-transparent border-2 border-yellow-500 rounded-lg focus:ring-2 focus:ring-yellow-500 text-white placeholder-gray-500" placeholder="Enter space code" />
+            </div>
+            <button onClick={joinWithCode} className="w-full bg-gray-800 border-2 border-yellow-500 text-yellow-500 py-3 rounded-lg font-bold hover:bg-gray-700 transition">Join Space</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (showAdminSetup) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center p-4">
@@ -365,12 +429,15 @@ function FamilyResetApp() {
       <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center p-4 z-50">
         <div className="bg-gradient-to-br from-gray-900 to-black border-2 border-yellow-500 rounded-2xl shadow-2xl p-6 max-w-md w-full">
           <h2 className="text-2xl font-bold text-yellow-500 mb-4">Invite Family Members</h2>
-          <p className="text-gray-300 mb-4">Share this link with family members to invite them to your space</p>
-          <div className="bg-gray-900 border border-yellow-500 p-4 rounded-lg mb-4 break-all text-sm text-yellow-400">{generateInviteLink()}</div>
+          <p className="text-gray-300 mb-4">Share this code with family members to invite them to your space</p>
+          <div className="bg-gray-900 border border-yellow-500 p-4 rounded-lg mb-4 text-center">
+            <p className="text-yellow-400 text-2xl font-bold tracking-wider">{generateInviteLink()}</p>
+          </div>
+          <p className="text-gray-400 text-sm mb-4">They can enter this code on the landing page to join</p>
           <div className="flex gap-2">
             <button onClick={copyInviteLink} className="flex-1 bg-yellow-500 text-black py-3 rounded-lg font-bold hover:bg-yellow-400 transition flex items-center justify-center gap-2">
               {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
-              {copied ? 'Copied' : 'Copy Link'}
+              {copied ? 'Copied' : 'Copy Code'}
             </button>
             <button onClick={() => setShowInviteModal(false)} className="flex-1 bg-gray-800 text-yellow-500 border border-yellow-500 py-3 rounded-lg font-bold hover:bg-gray-700 transition">Close</button>
           </div>
