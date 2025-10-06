@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, Users, Shield, Sparkles, MessageCircle, Settings, LogOut, Home, Link2, Copy, Check } from 'lucide-react';
+import { Heart, Users, Shield, Sparkles, MessageCircle, Settings, LogOut, Home, Link2, Copy, Check, Eye } from 'lucide-react';
 
 function FamilyResetApp() {
   const [currentUser, setCurrentUser] = useState(null);
   const [currentSpace, setCurrentSpace] = useState(null);
   const [activeTab, setActiveTab] = useState('home');
-  const [showAdminSetup, setShowAdminSetup] = useState(true);
+  const [showAdminSetup, setShowAdminSetup] = useState(false);
+  const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [showMemberJoin, setShowMemberJoin] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -16,24 +17,44 @@ function FamilyResetApp() {
   const [adminPassword, setAdminPassword] = useState('');
   const [spaceName, setSpaceName] = useState('');
   const [spaceDescription, setSpaceDescription] = useState('');
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
   const [memberName, setMemberName] = useState('');
   const [memberColor, setMemberColor] = useState('#EAB308');
   const [newRule, setNewRule] = useState('');
+  const [selectedRuleTemplate, setSelectedRuleTemplate] = useState('');
   const [newHope, setNewHope] = useState('');
+  const [hopeType, setHopeType] = useState('personal');
   const [newShare, setNewShare] = useState('');
   const [editingProfile, setEditingProfile] = useState(false);
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState('');
+  const [likedRules, setLikedRules] = useState({});
+
+  const ruleTemplates = [
+    "We listen without interrupting",
+    "We speak with kindness and respect",
+    "We take responsibility for our feelings",
+    "We ask permission before giving advice",
+    "We honor each other's boundaries",
+    "We celebrate each other's wins",
+    "We apologize when we hurt someone",
+    "We practice patience and understanding"
+  ];
 
   useEffect(() => {
     const saved = window.familyResetData || { spaces: {} };
     setSpaces(saved.spaces || {});
     const urlParams = new URLSearchParams(window.location.search);
     const spaceId = urlParams.get('space');
+    
     if (spaceId && saved.spaces[spaceId]) {
       setCurrentSpace(saved.spaces[spaceId]);
-      setShowAdminSetup(false);
       setShowMemberJoin(true);
+    } else if (Object.keys(saved.spaces || {}).length > 0) {
+      setShowAdminLogin(true);
+    } else {
+      setShowAdminSetup(true);
     }
   }, []);
 
@@ -54,6 +75,7 @@ function FamilyResetApp() {
       id: Date.now().toString() + '-admin',
       name: adminName.trim(),
       email: adminEmail.trim(),
+      password: adminPassword,
       color: '#EAB308',
       role: 'admin',
       joinedAt: new Date().toISOString()
@@ -73,6 +95,24 @@ function FamilyResetApp() {
     setCurrentSpace(newSpace);
     setCurrentUser(admin);
     setShowAdminSetup(false);
+  };
+
+  const adminLogin = () => {
+    if (!loginEmail.trim() || !loginPassword.trim()) return;
+    
+    const userSpace = Object.values(spaces).find(space => 
+      space.admin.email === loginEmail.trim() && space.admin.password === loginPassword
+    );
+    
+    if (userSpace) {
+      setCurrentSpace(userSpace);
+      setCurrentUser(userSpace.admin);
+      setShowAdminLogin(false);
+      setLoginEmail('');
+      setLoginPassword('');
+    } else {
+      alert('Invalid email or password');
+    }
   };
 
   const joinSpace = () => {
@@ -111,17 +151,20 @@ function FamilyResetApp() {
   const handleLogout = () => {
     setCurrentUser(null);
     setCurrentSpace(null);
-    setShowAdminSetup(true);
+    setShowAdminLogin(true);
     setActiveTab('home');
     setShowSettings(false);
     window.history.replaceState({}, '', window.location.pathname);
   };
 
   const addGroundRule = () => {
-    if (!newRule.trim()) return;
+    if (!currentUser || !currentSpace) return;
+    const ruleText = selectedRuleTemplate || newRule.trim();
+    if (!ruleText) return;
+    
     const rule = {
       id: Date.now().toString(),
-      text: newRule.trim(),
+      text: ruleText,
       author: currentUser.name,
       authorColor: currentUser.color,
       createdAt: new Date().toISOString()
@@ -129,13 +172,16 @@ function FamilyResetApp() {
     const updatedSpace = { ...currentSpace, groundRules: [...currentSpace.groundRules, rule] };
     setSpaces(prev => ({ ...prev, [currentSpace.id]: updatedSpace }));
     setNewRule('');
+    setSelectedRuleTemplate('');
   };
 
   const addHope = () => {
+    if (!currentUser || !currentSpace) return;
     if (!newHope.trim()) return;
     const hope = {
       id: Date.now().toString(),
       text: newHope.trim(),
+      type: hopeType,
       author: currentUser.name,
       authorColor: currentUser.color,
       createdAt: new Date().toISOString()
@@ -146,6 +192,7 @@ function FamilyResetApp() {
   };
 
   const addShare = () => {
+    if (!currentUser || !currentSpace) return;
     if (!newShare.trim()) return;
     const share = {
       id: Date.now().toString(),
@@ -160,12 +207,14 @@ function FamilyResetApp() {
   };
 
   const startEditProfile = () => {
+    if (!currentUser) return;
     setEditName(currentUser.name);
     setEditColor(currentUser.color);
     setEditingProfile(true);
   };
 
   const saveProfile = () => {
+    if (!currentUser || !currentSpace) return;
     if (!editName.trim()) return;
     const updatedUser = { ...currentUser, name: editName.trim(), color: editColor };
     const updatedMembers = currentSpace.members.map(m => m.id === currentUser.id ? updatedUser : m);
@@ -183,6 +232,27 @@ function FamilyResetApp() {
     setSpaces(prev => ({ ...prev, [currentSpace.id]: updatedSpace }));
     setCurrentUser(updatedUser);
     setEditingProfile(false);
+  };
+
+  const toggleLikeRule = (ruleId) => {
+    if (!currentUser || !currentSpace) return;
+    
+    const updatedRules = currentSpace.groundRules.map(rule => {
+      if (rule.id === ruleId) {
+        const likes = rule.likes || [];
+        const hasLiked = likes.includes(currentUser.id);
+        return {
+          ...rule,
+          likes: hasLiked 
+            ? likes.filter(id => id !== currentUser.id)
+            : [...likes, currentUser.id]
+        };
+      }
+      return rule;
+    });
+    
+    const updatedSpace = { ...currentSpace, groundRules: updatedRules };
+    setSpaces(prev => ({ ...prev, [currentSpace.id]: updatedSpace }));
   };
 
   const cancelEdit = () => {
@@ -222,6 +292,32 @@ function FamilyResetApp() {
               <textarea value={spaceDescription} onChange={(e) => setSpaceDescription(e.target.value)} className="w-full px-4 py-3 bg-gray-900 border border-yellow-500 rounded-lg focus:ring-2 focus:ring-yellow-500 text-white placeholder-gray-500 resize-none" rows="2" placeholder="A space for our blended family to heal together" />
             </div>
             <button onClick={createSpace} className="w-full bg-yellow-500 text-black py-3 rounded-lg font-bold hover:bg-yellow-400 transition">Create Space</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (showAdminLogin) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center p-4">
+        <div className="bg-gradient-to-br from-gray-900 to-black border-2 border-yellow-500 rounded-2xl shadow-2xl p-8 max-w-md w-full">
+          <div className="text-center mb-8">
+            <Heart className="w-16 h-16 mx-auto mb-4 text-yellow-500" />
+            <h1 className="text-3xl font-bold text-yellow-500 mb-2">Welcome Back</h1>
+            <p className="text-gray-300">Sign in to your healing space</p>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-yellow-500 mb-2">Email</label>
+              <input type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} className="w-full px-4 py-3 bg-gray-900 border border-yellow-500 rounded-lg focus:ring-2 focus:ring-yellow-500 text-white placeholder-gray-500" placeholder="your@email.com" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-yellow-500 mb-2">Password</label>
+              <input type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && adminLogin()} className="w-full px-4 py-3 bg-gray-900 border border-yellow-500 rounded-lg focus:ring-2 focus:ring-yellow-500 text-white placeholder-gray-500" placeholder="Password" />
+            </div>
+            <button onClick={adminLogin} className="w-full bg-yellow-500 text-black py-3 rounded-lg font-bold hover:bg-yellow-400 transition">Sign In</button>
+            <button onClick={() => { setShowAdminLogin(false); setShowAdminSetup(true); }} className="w-full bg-gray-800 border border-yellow-500 text-yellow-500 py-3 rounded-lg font-bold hover:bg-gray-700 transition">Create New Space</button>
           </div>
         </div>
       </div>
@@ -278,6 +374,11 @@ function FamilyResetApp() {
   }
 
   if (showSettings) {
+    if (!currentUser) {
+      setShowSettings(false);
+      return null;
+    }
+    
     return (
       <div className="min-h-screen bg-black">
         <div className="max-w-2xl mx-auto p-4">
@@ -345,6 +446,10 @@ function FamilyResetApp() {
     );
   }
 
+  if (!currentUser || !currentSpace) {
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-black">
       <div className="max-w-2xl mx-auto p-4">
@@ -370,7 +475,7 @@ function FamilyResetApp() {
               <Sparkles className="w-4 h-4 inline mr-2" />Hopes
             </button>
             <button onClick={() => setActiveTab('share')} className={activeTab === 'share' ? 'px-4 py-2 rounded-lg font-bold whitespace-nowrap transition bg-yellow-500 text-black' : 'px-4 py-2 rounded-lg font-bold whitespace-nowrap transition bg-gray-800 text-yellow-500 border border-yellow-500'}>
-              <MessageCircle className="w-4 h-4 inline mr-2" />Safe Share
+              <MessageCircle className="w-4 h-4 inline mr-2" />Personal Views
             </button>
           </div>
         </div>
@@ -401,7 +506,7 @@ function FamilyResetApp() {
                 </div>
                 <div className="bg-gray-900 border border-green-500 p-4 rounded-lg text-center">
                   <p className="text-3xl font-bold text-green-400">{currentSpace.shares.length}</p>
-                  <p className="text-sm text-gray-400">Safe Shares</p>
+                  <p className="text-sm text-gray-400">Personal Views</p>
                 </div>
               </div>
               <div className="space-y-3">
@@ -424,7 +529,7 @@ function FamilyResetApp() {
                 )}
                 {currentSpace.shares.filter(s => s.author === currentUser.name).length > 0 && (
                   <div className="bg-gray-900 border border-green-500 p-3 rounded-lg">
-                    <p className="text-sm font-medium text-green-400 mb-2">Safe Shares ({currentSpace.shares.filter(s => s.author === currentUser.name).length})</p>
+                    <p className="text-sm font-medium text-green-400 mb-2">Personal Views ({currentSpace.shares.filter(s => s.author === currentUser.name).length})</p>
                     {currentSpace.shares.filter(s => s.author === currentUser.name).slice(0, 2).map(share => (
                       <p key={share.id} className="text-sm text-gray-300 truncate">• {share.text}</p>
                     ))}
@@ -457,22 +562,54 @@ function FamilyResetApp() {
         {activeTab === 'rules' && (
           <div className="bg-gradient-to-br from-gray-900 to-black border-2 border-yellow-500 rounded-2xl shadow-2xl p-6">
             <h2 className="text-xl font-bold text-yellow-500 mb-4">Ground Rules</h2>
+            
+            <div className="bg-gray-900 border border-yellow-500 rounded-lg p-4 mb-4">
+              <h3 className="text-yellow-500 font-bold mb-2 flex items-center gap-2">
+                <Shield className="w-5 h-5" />
+                Quick Tips
+              </h3>
+              <ul className="text-gray-300 text-sm space-y-1">
+                <li>• Select up to 5 rules for your peace talk</li>
+                <li>• Like rules you agree with to show support</li>
+                <li>• Complete this before starting difficult conversations</li>
+              </ul>
+            </div>
+            
             <div className="mb-4">
-              <textarea value={newRule} onChange={(e) => setNewRule(e.target.value)} placeholder="Add a ground rule for our space" className="w-full px-4 py-3 bg-gray-900 border border-yellow-500 rounded-lg focus:ring-2 focus:ring-yellow-500 text-white placeholder-gray-500 resize-none" rows="3" />
+              <label className="block text-sm font-medium text-yellow-500 mb-2">Choose a Template</label>
+              <select value={selectedRuleTemplate} onChange={(e) => setSelectedRuleTemplate(e.target.value)} className="w-full px-4 py-3 bg-gray-900 border border-yellow-500 rounded-lg focus:ring-2 focus:ring-yellow-500 text-white mb-3">
+                <option value="">Select a ground rule template...</option>
+                {ruleTemplates.map((template, idx) => (
+                  <option key={idx} value={template}>{template}</option>
+                ))}
+              </select>
+              
+              <label className="block text-sm font-medium text-yellow-500 mb-2">Or Write Your Own</label>
+              <textarea value={newRule} onChange={(e) => setNewRule(e.target.value)} placeholder="Add a custom ground rule" className="w-full px-4 py-3 bg-gray-900 border border-yellow-500 rounded-lg focus:ring-2 focus:ring-yellow-500 text-white placeholder-gray-500 resize-none" rows="3" />
               <button onClick={addGroundRule} className="mt-2 w-full bg-yellow-500 text-black py-2 rounded-lg font-bold hover:bg-yellow-400">Add Rule</button>
             </div>
             <div className="space-y-3">
-              {currentSpace.groundRules.map(rule => (
-                <div key={rule.id} className="p-4 bg-gray-900 rounded-lg border-l-4" style={{ borderColor: rule.authorColor }}>
-                  <p className="text-white mb-2">{rule.text}</p>
-                  <div className="flex items-center gap-2 text-sm text-gray-400">
-                    <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: rule.authorColor }}>{rule.author.charAt(0).toUpperCase()}</div>
-                    <span>{rule.author}</span>
-                    <span>•</span>
-                    <span>{new Date(rule.createdAt).toLocaleDateString()}</span>
+              {currentSpace.groundRules.map(rule => {
+                const likes = rule.likes || [];
+                const hasLiked = likes.includes(currentUser.id);
+                return (
+                  <div key={rule.id} className="p-4 bg-gray-900 rounded-lg border-l-4" style={{ borderColor: rule.authorColor }}>
+                    <p className="text-white mb-2">{rule.text}</p>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-sm text-gray-400">
+                        <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: rule.authorColor }}>{rule.author.charAt(0).toUpperCase()}</div>
+                        <span>{rule.author}</span>
+                        <span>•</span>
+                        <span>{new Date(rule.createdAt).toLocaleDateString()}</span>
+                      </div>
+                      <button onClick={() => toggleLikeRule(rule.id)} className="flex items-center gap-1 text-sm">
+                        <Heart className={hasLiked ? 'w-5 h-5 fill-yellow-500 text-yellow-500' : 'w-5 h-5 text-gray-500'} />
+                        <span className={hasLiked ? 'text-yellow-500 font-bold' : 'text-gray-500'}>{likes.length}</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               {currentSpace.groundRules.length === 0 && (<p className="text-center text-gray-500 py-8">No ground rules yet. Be the first to add one.</p>)}
             </div>
           </div>
@@ -481,13 +618,40 @@ function FamilyResetApp() {
         {activeTab === 'hopes' && (
           <div className="bg-gradient-to-br from-gray-900 to-black border-2 border-yellow-500 rounded-2xl shadow-2xl p-6">
             <h2 className="text-xl font-bold text-yellow-500 mb-4">Our Hopes</h2>
+            
+            <div className="bg-gray-900 border border-yellow-500 rounded-lg p-4 mb-4">
+              <h3 className="text-yellow-500 font-bold mb-2 flex items-center gap-2">
+                <Sparkles className="w-5 h-5" />
+                Quick Tips
+              </h3>
+              <ul className="text-gray-300 text-sm space-y-1">
+                <li>• Personal hopes are for individual growth</li>
+                <li>• Collective hopes are for family goals</li>
+                <li>• Be specific and positive in your hopes</li>
+                <li>• Follow up in one week to check progress</li>
+              </ul>
+            </div>
+            
             <div className="mb-4">
-              <textarea value={newHope} onChange={(e) => setNewHope(e.target.value)} placeholder="Share a hope for our family" className="w-full px-4 py-3 bg-gray-900 border border-yellow-500 rounded-lg focus:ring-2 focus:ring-yellow-500 text-white placeholder-gray-500 resize-none" rows="3" />
+              <div className="flex gap-2 mb-3">
+                <button onClick={() => setHopeType('personal')} className={hopeType === 'personal' ? 'flex-1 bg-yellow-500 text-black py-2 rounded-lg font-bold' : 'flex-1 bg-gray-800 border border-yellow-500 text-yellow-500 py-2 rounded-lg font-bold'}>
+                  Personal Hope
+                </button>
+                <button onClick={() => setHopeType('collective')} className={hopeType === 'collective' ? 'flex-1 bg-yellow-500 text-black py-2 rounded-lg font-bold' : 'flex-1 bg-gray-800 border border-yellow-500 text-yellow-500 py-2 rounded-lg font-bold'}>
+                  Collective Hope
+                </button>
+              </div>
+              <textarea value={newHope} onChange={(e) => setNewHope(e.target.value)} placeholder={hopeType === 'personal' ? 'Share a personal hope...' : 'Share a hope for our family...'} className="w-full px-4 py-3 bg-gray-900 border border-yellow-500 rounded-lg focus:ring-2 focus:ring-yellow-500 text-white placeholder-gray-500 resize-none" rows="3" />
               <button onClick={addHope} className="mt-2 w-full bg-yellow-500 text-black py-2 rounded-lg font-bold hover:bg-yellow-400">Share Hope</button>
             </div>
             <div className="space-y-3">
               {currentSpace.hopes.map(hope => (
                 <div key={hope.id} className="p-4 bg-gray-900 rounded-lg border-l-4" style={{ borderColor: hope.authorColor }}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className={hope.type === 'personal' ? 'text-xs px-2 py-1 rounded bg-purple-900 text-purple-300' : 'text-xs px-2 py-1 rounded bg-blue-900 text-blue-300'}>
+                      {hope.type === 'personal' ? 'Personal' : 'Collective'}
+                    </span>
+                  </div>
                   <p className="text-white mb-2">{hope.text}</p>
                   <div className="flex items-center gap-2 text-sm text-gray-400">
                     <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: hope.authorColor }}>{hope.author.charAt(0).toUpperCase()}</div>
@@ -504,14 +668,33 @@ function FamilyResetApp() {
 
         {activeTab === 'share' && (
           <div className="bg-gradient-to-br from-gray-900 to-black border-2 border-yellow-500 rounded-2xl shadow-2xl p-6">
-            <h2 className="text-xl font-bold text-yellow-500 mb-4">Safe Share</h2>
+            <h2 className="text-xl font-bold text-yellow-500 mb-4">Personal Views</h2>
+            
+            <div className="bg-gray-900 border border-yellow-500 rounded-lg p-4 mb-4">
+              <h3 className="text-yellow-500 font-bold mb-2 flex items-center gap-2">
+                <Eye className="w-5 h-5" />
+                Quick Tips
+              </h3>
+              <ul className="text-gray-300 text-sm space-y-1">
+                <li>• Share your perspective without judgment</li>
+                <li>• Use "I feel" statements instead of "You always"</li>
+                <li>• This is a safe space for honest feelings</li>
+                <li>• Progress happens in small steps</li>
+              </ul>
+            </div>
+            
+            <p className="text-gray-400 text-sm mb-4">Share your personal perspective and feelings in a safe space</p>
             <div className="mb-4">
-              <textarea value={newShare} onChange={(e) => setNewShare(e.target.value)} placeholder="Share something with the family" className="w-full px-4 py-3 bg-gray-900 border border-yellow-500 rounded-lg focus:ring-2 focus:ring-yellow-500 text-white placeholder-gray-500 resize-none" rows="3" />
-              <button onClick={addShare} className="mt-2 w-full bg-yellow-500 text-black py-2 rounded-lg font-bold hover:bg-yellow-400">Share</button>
+              <textarea value={newShare} onChange={(e) => setNewShare(e.target.value)} placeholder="Share your personal view or feeling..." className="w-full px-4 py-3 bg-gray-900 border border-yellow-500 rounded-lg focus:ring-2 focus:ring-yellow-500 text-white placeholder-gray-500 resize-none" rows="3" />
+              <button onClick={addShare} className="mt-2 w-full bg-yellow-500 text-black py-2 rounded-lg font-bold hover:bg-yellow-400">Share View</button>
             </div>
             <div className="space-y-3">
               {currentSpace.shares.map(share => (
                 <div key={share.id} className="p-4 bg-gray-900 rounded-lg border-l-4" style={{ borderColor: share.authorColor }}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Eye className="w-4 h-4 text-green-400" />
+                    <span className="text-xs text-green-400">Personal View</span>
+                  </div>
                   <p className="text-white mb-2">{share.text}</p>
                   <div className="flex items-center gap-2 text-sm text-gray-400">
                     <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: share.authorColor }}>{share.author.charAt(0).toUpperCase()}</div>
@@ -521,7 +704,11 @@ function FamilyResetApp() {
                   </div>
                 </div>
               ))}
-              {currentSpace.shares.length === 0 && (<p className="text-center text-gray-500 py-8">No shares yet. Be the first to share.</p>)}
+              {currentSpace.shares.length === 0 && (<p className="text-center text-gray-500 py-8">No personal views shared yet. Be the first to share.</p>)}
+            </div>
+            
+            <div className="mt-6 pt-6 border-t border-gray-700 text-center">
+              <p className="text-gray-500 text-xs">© 2025 Ayende Consulting. All rights reserved.</p>
             </div>
           </div>
         )}
